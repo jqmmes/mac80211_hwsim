@@ -708,6 +708,7 @@ static void hwsim_send_nullfunc(struct mac80211_hwsim_data *data, u8 *mac,
 	rcu_read_unlock();
 }
 
+int n_packets = 0;
 
 static void hwsim_send_nullfunc_ps(void *dat, u8 *mac,
 				   struct ieee80211_vif *vif)
@@ -1049,6 +1050,37 @@ static inline u16 trans_tx_rate_flags_ieee2hwsim(struct ieee80211_tx_rate *rate)
 	return result;
 }
 
+
+static inline u16 trans_tx_rate_flags_hwsim2ieee(struct hwsim_tx_rate_flag *rate)
+{
+	u16 result = 0;
+
+	if (rate->flags & MAC80211_HWSIM_TX_RC_USE_RTS_CTS)
+		result |= IEEE80211_TX_RC_USE_RTS_CTS;
+	if (rate->flags & MAC80211_HWSIM_TX_RC_USE_CTS_PROTECT)
+		result |= IEEE80211_TX_RC_USE_CTS_PROTECT;
+	if (rate->flags & MAC80211_HWSIM_TX_RC_USE_SHORT_PREAMBLE)
+		result |= IEEE80211_TX_RC_USE_SHORT_PREAMBLE;
+	if (rate->flags & MAC80211_HWSIM_TX_RC_MCS)
+		result |= IEEE80211_TX_RC_MCS;
+	if (rate->flags & MAC80211_HWSIM_TX_RC_GREEN_FIELD)
+		result |= IEEE80211_TX_RC_GREEN_FIELD;
+	if (rate->flags & MAC80211_HWSIM_TX_RC_40_MHZ_WIDTH)
+		result |= IEEE80211_TX_RC_40_MHZ_WIDTH;
+	if (rate->flags & MAC80211_HWSIM_TX_RC_DUP_DATA)
+		result |= IEEE80211_TX_RC_DUP_DATA;
+	if (rate->flags & MAC80211_HWSIM_TX_RC_SHORT_GI)
+		result |= IEEE80211_TX_RC_SHORT_GI;
+	if (rate->flags & MAC80211_HWSIM_TX_RC_VHT_MCS)
+		result |= IEEE80211_TX_RC_VHT_MCS;
+	if (rate->flags & MAC80211_HWSIM_TX_RC_80_MHZ_WIDTH)
+		result |= IEEE80211_TX_RC_80_MHZ_WIDTH;
+	if (rate->flags & MAC80211_HWSIM_TX_RC_160_MHZ_WIDTH)
+		result |= IEEE80211_TX_RC_160_MHZ_WIDTH;
+
+	return result;
+}
+
 static void mac80211_hwsim_tx_frame_nl(struct ieee80211_hw *hw,
 				       struct sk_buff *my_skb,
 				       int dst_portid)
@@ -1379,6 +1411,8 @@ static void mac80211_hwsim_tx(struct ieee80211_hw *hw,
 	struct ieee80211_channel *channel;
 	bool ack;
 	u32 _portid;
+
+	printk("%d\n", n_packets++);
 
 	if (WARN_ON(skb->len < 10)) {
 		/* Should not happen; just a sanity check for addr1 use */
@@ -2976,7 +3010,8 @@ static int hwsim_tx_info_frame_received_nl(struct sk_buff *skb_2,
 	    !info->attrs[HWSIM_ATTR_FLAGS] ||
 	    !info->attrs[HWSIM_ATTR_COOKIE] ||
 	    !info->attrs[HWSIM_ATTR_SIGNAL] ||
-	    !info->attrs[HWSIM_ATTR_TX_INFO])
+	    !info->attrs[HWSIM_ATTR_TX_INFO] ||
+			!info->attrs[HWSIM_ATTR_TX_INFO_FLAGS])
 		goto out;
 
 	src = (void *)nla_data(info->attrs[HWSIM_ATTR_ADDR_TRANSMITTER]);
@@ -3023,9 +3058,15 @@ static int hwsim_tx_info_frame_received_nl(struct sk_buff *skb_2,
 	ieee80211_tx_info_clear_status(txi);
 
 	for (i = 0; i < IEEE80211_TX_MAX_RATES; i++) {
+		printk("%d\t", txi->status.rates[i].idx);
 		txi->status.rates[i].idx = tx_attempts[i].idx;
 		txi->status.rates[i].count = tx_attempts[i].count;
+		txi->status.rates[i].flags = trans_tx_rate_flags_hwsim2ieee((struct hwsim_tx_rate_flag*)nla_data(info->attrs[HWSIM_ATTR_TX_INFO_FLAGS]));
+
+		txi->control.rates[i].idx = tx_attempts[i].idx;
+		txi->control.rates[i].flags = trans_tx_rate_flags_hwsim2ieee((struct hwsim_tx_rate_flag*)nla_data(info->attrs[HWSIM_ATTR_TX_INFO_FLAGS]));
 	}
+	printk("\n");
 
 	txi->status.ack_signal = nla_get_u32(info->attrs[HWSIM_ATTR_SIGNAL]);
 
@@ -3050,10 +3091,12 @@ static int hwsim_cloned_frame_received_nl(struct sk_buff *skb_2,
 {
 	struct mac80211_hwsim_data *data2;
 	struct ieee80211_rx_status rx_status;
+	struct ieee80211_tx_info *txi;
 	const u8 *dst;
 	int frame_data_len;
 	void *frame_data;
 	struct sk_buff *skb = NULL;
+	int i;
 
 	if (!info->attrs[HWSIM_ATTR_ADDR_RECEIVER] ||
 	    !info->attrs[HWSIM_ATTR_FRAME] ||
@@ -3091,6 +3134,15 @@ static int hwsim_cloned_frame_received_nl(struct sk_buff *skb_2,
 	if (data2->idle || !data2->started)
 		goto out;
 
+	txi = IEEE80211_SKB_CB(skb);
+	for (i=0; i<IEEE80211_TX_MAX_RATES; i++) {
+		txi->control.rates[i].flags = trans_tx_rate_flags_hwsim2ieee((struct hwsim_tx_rate_flag*)nla_data(info->attrs[HWSIM_ATTR_TX_INFO_FLAGS]));
+		txi->status.rates[i].flags = trans_tx_rate_flags_hwsim2ieee((struct hwsim_tx_rate_flag*)nla_data(info->attrs[HWSIM_ATTR_TX_INFO_FLAGS]));
+		txi->control.rates[i].idx = nla_get_u32(info->attrs[HWSIM_ATTR_RX_RATE]);
+		txi->status.rates[i].idx = nla_get_u32(info->attrs[HWSIM_ATTR_RX_RATE]);
+		txi->status.rates[i].count = 1;
+	}
+
 	/* A frame is received from user space */
 	memset(&rx_status, 0, sizeof(rx_status));
 	if (info->attrs[HWSIM_ATTR_FREQ]) {
@@ -3113,8 +3165,30 @@ static int hwsim_cloned_frame_received_nl(struct sk_buff *skb_2,
 	}
 
 	rx_status.band = data2->channel->band;
-	rx_status.rate_idx = nla_get_u32(info->attrs[HWSIM_ATTR_RX_RATE]);
+	//rx_status.rate_idx = nla_get_u32(info->attrs[HWSIM_ATTR_RX_RATE]);
 	rx_status.signal = nla_get_u32(info->attrs[HWSIM_ATTR_SIGNAL]);
+
+	if (txi->control.rates[0].flags & IEEE80211_TX_RC_VHT_MCS) {
+		rx_status.rate_idx =
+			ieee80211_rate_get_vht_mcs(&txi->control.rates[0]);
+		rx_status.nss =
+			ieee80211_rate_get_vht_nss(&txi->control.rates[0]);
+		rx_status.encoding = RX_ENC_VHT;
+	} else {
+		rx_status.rate_idx = txi->control.rates[0].idx;
+		if (txi->control.rates[0].flags & IEEE80211_TX_RC_MCS)
+			rx_status.encoding = RX_ENC_HT;
+	}
+	if (txi->control.rates[0].flags & IEEE80211_TX_RC_40_MHZ_WIDTH)
+		rx_status.bw = RATE_INFO_BW_40;
+	else if (txi->control.rates[0].flags & IEEE80211_TX_RC_80_MHZ_WIDTH)
+		rx_status.bw = RATE_INFO_BW_80;
+	else if (txi->control.rates[0].flags & IEEE80211_TX_RC_160_MHZ_WIDTH)
+		rx_status.bw = RATE_INFO_BW_160;
+	else
+		rx_status.bw = RATE_INFO_BW_20;
+	if (txi->control.rates[0].flags & IEEE80211_TX_RC_SHORT_GI)
+		rx_status.enc_flags |= RX_ENC_FLAG_SHORT_GI;
 
 	memcpy(IEEE80211_SKB_RXCB(skb), &rx_status, sizeof(rx_status));
 	data2->rx_pkts++;
