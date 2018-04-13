@@ -1415,14 +1415,14 @@ static void mac80211_hwsim_tx(struct ieee80211_hw *hw,
 	u32 _portid;
 
 	//dump_stack();
-	printk("txi->flag: %x", txi->flag);
+	printk("txi->flag: %x", txi->flags);
 	printk("txi->ack_frame_id: %d", txi->ack_frame_id);
 	printk("txi->control.rates[0].idx: %d", txi->control.rates[0].idx);
 	printk("txi->control.rates[0].count: %d", txi->control.rates[0].count);
 	printk("txi->control.rates[0].flags: %x", txi->control.rates[0].flags);
-	printk("txi->control.jiffies: %d", txi->control.jiffies;
+	printk("txi->control.jiffies: %ld", txi->control.jiffies);
 	printk("txi->control.flags: %x", txi->control.flags);
-	printk("txi->ack_cookie: %d", txi->ack_cookie);
+	printk("txi->ack.cookie: %lld", txi->ack.cookie);
 	printk("txi->status.rates[0].idx: %d", txi->status.rates[0].idx);
 	printk("txi->status.rates[0].count: %d", txi->status.rates[0].count);
 	printk("txi->status.rates[0].flags: %x", txi->status.rates[0].flags);
