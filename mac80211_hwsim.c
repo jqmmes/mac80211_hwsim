@@ -859,9 +859,11 @@ static void mac80211_hwsim_monitor_rx(struct ieee80211_hw *hw,
 	if (WARN_ON(!txrate))
 		return;
 
-	if (!netif_running(hwsim_mon))
+	if (!netif_running(hwsim_mon)){
+		//printk("!netif_running(hwsim_mon)");
 		return;
-
+	}
+	printk("netif_running(hwsim_mon)");
 	skb = skb_copy_expand(tx_skb, sizeof(*hdr), 0, GFP_ATOMIC);
 	if (skb == NULL)
 		return;
@@ -1412,7 +1414,20 @@ static void mac80211_hwsim_tx(struct ieee80211_hw *hw,
 	bool ack;
 	u32 _portid;
 
-	printk("%d\n", n_packets++);
+	//dump_stack();
+	printk("txi->flag: %x", txi->flag);
+	printk("txi->ack_frame_id: %d", txi->ack_frame_id);
+	printk("txi->control.rates[0].idx: %d", txi->control.rates[0].idx);
+	printk("txi->control.rates[0].count: %d", txi->control.rates[0].count);
+	printk("txi->control.rates[0].flags: %x", txi->control.rates[0].flags);
+	printk("txi->control.jiffies: %d", txi->control.jiffies;
+	printk("txi->control.flags: %x", txi->control.flags);
+	printk("txi->ack_cookie: %d", txi->ack_cookie);
+	printk("txi->status.rates[0].idx: %d", txi->status.rates[0].idx);
+	printk("txi->status.rates[0].count: %d", txi->status.rates[0].count);
+	printk("txi->status.rates[0].flags: %x", txi->status.rates[0].flags);
+	printk("txi->status.ack_signal: %d", txi->status.ack_signal);
+	printk("txi->status.tx_time: %d", txi->status.tx_time);
 
 	if (WARN_ON(skb->len < 10)) {
 		/* Should not happen; just a sanity check for addr1 use */
@@ -1452,6 +1467,7 @@ static void mac80211_hwsim_tx(struct ieee80211_hw *hw,
 		ieee80211_get_tx_rates(txi->control.vif, control->sta, skb,
 				       txi->control.rates,
 				       ARRAY_SIZE(txi->control.rates));
+
 
 	if (skb->len >= 24 + 8 &&
 	    ieee80211_is_probe_resp(hdr->frame_control)) {
@@ -3058,15 +3074,9 @@ static int hwsim_tx_info_frame_received_nl(struct sk_buff *skb_2,
 	ieee80211_tx_info_clear_status(txi);
 
 	for (i = 0; i < IEEE80211_TX_MAX_RATES; i++) {
-		printk("%d\t", txi->status.rates[i].idx);
 		txi->status.rates[i].idx = tx_attempts[i].idx;
 		txi->status.rates[i].count = tx_attempts[i].count;
-		txi->status.rates[i].flags = trans_tx_rate_flags_hwsim2ieee((struct hwsim_tx_rate_flag*)nla_data(info->attrs[HWSIM_ATTR_TX_INFO_FLAGS]));
-
-		txi->control.rates[i].idx = tx_attempts[i].idx;
-		txi->control.rates[i].flags = trans_tx_rate_flags_hwsim2ieee((struct hwsim_tx_rate_flag*)nla_data(info->attrs[HWSIM_ATTR_TX_INFO_FLAGS]));
 	}
-	printk("\n");
 
 	txi->status.ack_signal = nla_get_u32(info->attrs[HWSIM_ATTR_SIGNAL]);
 
@@ -3136,7 +3146,7 @@ static int hwsim_cloned_frame_received_nl(struct sk_buff *skb_2,
 
 	txi = IEEE80211_SKB_CB(skb);
 	for (i=0; i<IEEE80211_TX_MAX_RATES; i++) {
-		txi->control.rates[i].flags = trans_tx_rate_flags_hwsim2ieee((struct hwsim_tx_rate_flag*)nla_data(info->attrs[HWSIM_ATTR_TX_INFO_FLAGS]));
+		//txi->control.rates[i].flags = trans_tx_rate_flags_hwsim2ieee((struct hwsim_tx_rate_flag*)nla_data(info->attrs[HWSIM_ATTR_TX_INFO_FLAGS]));
 		txi->status.rates[i].flags = trans_tx_rate_flags_hwsim2ieee((struct hwsim_tx_rate_flag*)nla_data(info->attrs[HWSIM_ATTR_TX_INFO_FLAGS]));
 		txi->control.rates[i].idx = nla_get_u32(info->attrs[HWSIM_ATTR_RX_RATE]);
 		txi->status.rates[i].idx = nla_get_u32(info->attrs[HWSIM_ATTR_RX_RATE]);
