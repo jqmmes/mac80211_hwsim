@@ -863,7 +863,6 @@ static void mac80211_hwsim_monitor_rx(struct ieee80211_hw *hw,
 		//printk("!netif_running(hwsim_mon)");
 		return;
 	}
-	printk("netif_running(hwsim_mon)");
 	skb = skb_copy_expand(tx_skb, sizeof(*hdr), 0, GFP_ATOMIC);
 	if (skb == NULL)
 		return;
@@ -1175,6 +1174,8 @@ static void mac80211_hwsim_tx_frame_nl(struct ieee80211_hw *hw,
 	if (hwsim_unicast_netgroup(data, skb, dst_portid))
 		goto err_free_txskb;
 
+
+	printk("mac80211_hwsim_tx_frame_nl\t%lld\t%x:%x:%x:%x:%x:%x\t%lld", (u64) cookie, ((u8*)data->addresses[1].addr)[0], ((u8*)data->addresses[1].addr)[1], ((u8*)data->addresses[1].addr)[2], ((u8*)data->addresses[1].addr)[3], ((u8*)data->addresses[1].addr)[4], ((u8*)data->addresses[1].addr)[5], mac80211_hwsim_get_tsf_raw());
 	/* Enqueue the packet */
 	skb_queue_tail(&data->pending, my_skb);
 	data->tx_pkts++;
@@ -1413,13 +1414,16 @@ static void mac80211_hwsim_tx(struct ieee80211_hw *hw,
 	struct ieee80211_channel *channel;
 	bool ack;
 	u32 _portid;
+	//int i;
 
 	//dump_stack();
-	printk("txi->flag: %x", txi->flags);
+	/*printk("txi->flag: %x", txi->flags);
 	printk("txi->ack_frame_id: %d", txi->ack_frame_id);
-	printk("txi->control.rates[0].idx: %d", txi->control.rates[0].idx);
-	printk("txi->control.rates[0].count: %d", txi->control.rates[0].count);
-	printk("txi->control.rates[0].flags: %x", txi->control.rates[0].flags);
+	for (i=0; i < IEEE80211_TX_MAX_RATES; i++){
+		printk("txi->control.rates[%d].idx: %d", i, txi->control.rates[i].idx);
+		printk("txi->control.rates[%d].count: %d", i, txi->control.rates[i].count);
+		printk("txi->control.rates[%d].flags: %x", i, txi->control.rates[i].flags);
+	}
 	printk("txi->control.jiffies: %ld", txi->control.jiffies);
 	printk("txi->control.flags: %x", txi->control.flags);
 	printk("txi->ack.cookie: %lld", txi->ack.cookie);
@@ -1428,6 +1432,8 @@ static void mac80211_hwsim_tx(struct ieee80211_hw *hw,
 	printk("txi->status.rates[0].flags: %x", txi->status.rates[0].flags);
 	printk("txi->status.ack_signal: %d", txi->status.ack_signal);
 	printk("txi->status.tx_time: %d", txi->status.tx_time);
+	//printk("txi->control.vif->bss_conf.ht_operation_mode: %d", txi->control.vif->bss_conf.ht_operation_mode);
+	//printk("txi->control.vif->bss_conf.basic_rates: %d", txi->control.vif->bss_conf.basic_rates);*/
 
 	if (WARN_ON(skb->len < 10)) {
 		/* Should not happen; just a sanity check for addr1 use */
@@ -1592,6 +1598,8 @@ static void mac80211_hwsim_tx_frame(struct ieee80211_hw *hw,
 				       txi->control.rates,
 				       ARRAY_SIZE(txi->control.rates));
 	}
+
+	//printk("mac80211_hwsim_tx_frame");
 
 	mac80211_hwsim_monitor_rx(hw, skb, chan);
 
@@ -3034,6 +3042,8 @@ static int hwsim_tx_info_frame_received_nl(struct sk_buff *skb_2,
 	hwsim_flags = nla_get_u32(info->attrs[HWSIM_ATTR_FLAGS]);
 	ret_skb_cookie = nla_get_u64(info->attrs[HWSIM_ATTR_COOKIE]);
 
+	printk("hwsim_tx_info_frame_received_nl\t%lld\t%x:%x:%x:%x:%x:%x\t%lld", (u64) ret_skb_cookie, ((u8*)src)[0], ((u8*)src)[1], ((u8*)src)[2], ((u8*)src)[3], ((u8*)src)[4], ((u8*)src)[5], mac80211_hwsim_get_tsf_raw());
+
 	data2 = get_hwsim_data_ref_from_addr(src);
 	if (!data2)
 		goto out;
@@ -3103,10 +3113,13 @@ static int hwsim_cloned_frame_received_nl(struct sk_buff *skb_2,
 	struct ieee80211_rx_status rx_status;
 	struct ieee80211_tx_info *txi;
 	const u8 *dst;
+	const u8 *src;
 	int frame_data_len;
 	void *frame_data;
 	struct sk_buff *skb = NULL;
+	u64 ret_skb_cookie;
 	int i;
+
 
 	if (!info->attrs[HWSIM_ATTR_ADDR_RECEIVER] ||
 	    !info->attrs[HWSIM_ATTR_FRAME] ||
@@ -3115,8 +3128,12 @@ static int hwsim_cloned_frame_received_nl(struct sk_buff *skb_2,
 		goto out;
 
 	dst = (void *)nla_data(info->attrs[HWSIM_ATTR_ADDR_RECEIVER]);
+	src = (void *)nla_data(info->attrs[HWSIM_ATTR_ADDR_TRANSMITTER]);
 	frame_data_len = nla_len(info->attrs[HWSIM_ATTR_FRAME]);
 	frame_data = (void *)nla_data(info->attrs[HWSIM_ATTR_FRAME]);
+	ret_skb_cookie = nla_get_u64(info->attrs[HWSIM_ATTR_COOKIE]);
+
+	printk("hwsim_cloned_frame_received_nl\t%lld\t%x:%x:%x:%x:%x:%x\t%lld", (u64) ret_skb_cookie, ((u8*)src)[0], ((u8*)src)[1], ((u8*)src)[2], ((u8*)src)[3], ((u8*)src)[4], ((u8*)src)[5], mac80211_hwsim_get_tsf_raw());
 
 	/* Allocate new skb here */
 	skb = alloc_skb(frame_data_len, GFP_KERNEL);
